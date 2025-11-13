@@ -1,0 +1,21 @@
+{
+  "name": "osint-dashboard",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "chart.js": "4.4.2",
+    "react-chartjs-2": "5.2.0",
+    "cytoscape": "3.27.2"
+  },
+  "devDependencies": {
+    "vite": "5.4.8",
+    "@vitejs/plugin-react": "4.3.1"
+  }
+}

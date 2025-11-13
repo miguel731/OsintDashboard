@@ -1,0 +1,13 @@
+Quiero crear un dashboard OSINT interactivo que me permita ejecutar y visualizar resultados de herramientas de inteligencia como Amass, Spiderfoot, TheHarvester, Subfinder y HaveIBeenPwned.
+
+El flujo debe incluir:
+*Entrada de dominio o IP objetivo.
+*Ejecución de herramientas OSINT en contenedores (Docker si es posible).
+*Visualización de resultados en tablas, gráficos y mapas de red.
+*Organización por cliente o proyecto.
+*Exportación de reportes en PDF o CSV.
+*Automatización de escaneos periódicos y alertas si se detectan filtraciones.
+
+Quiero que cada herramienta esté integrada como un bloque modular, y que el sistema sea fácil de ampliar con nuevas herramientas OSINT en el futuro. 
+
+No soy desarrollador, así que necesito que el flujo sea claro, visual y fácil de configurar.
