@@ -3,7 +3,7 @@ import "chart.js/auto";
 import { Bar } from "react-chartjs-2";
 import Cytoscape from "cytoscape";
 
-const API = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API = import.meta.env.VITE_API_BASE || `${window.location.protocol}//${window.location.hostname}:8000`;
 
 export default function App() {
   const [clients, setClients] = useState([]);
@@ -20,6 +20,8 @@ export default function App() {
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [search, setSearch] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [logScanId, setLogScanId] = useState(null);
+  const [logs, setLogs] = useState([]);
 
   useEffect(() => {
     fetch(`${API}/api/projects`).then(r=>r.json()).then(setProjects);
@@ -27,10 +29,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const load = async () => {
+      const all = await fetch(`${API}/api/scans`).then(r=>r.json());
+      setScans(all);
+    };
+    load();
     if (!autoRefresh) return;
-    const id = setInterval(() => {
-      fetch(`${API}/api/scans`).then(r=>r.json()).then(setScans);
-    }, 8000);
+    const id = setInterval(load, 8000);
     return () => clearInterval(id);
   }, [autoRefresh]);
 
@@ -52,6 +57,8 @@ export default function App() {
       datasets: [{ label:"Hallazgos", data:Object.values(counts), backgroundColor:"#4f46e5" }]
     };
   };
+
+  const visibleScans = selectedProject ? scans.filter(s => s.project_id === selectedProject) : scans;
 
   const createProject = async () => {
     const name = prompt("Nombre del proyecto:");
@@ -75,6 +82,34 @@ export default function App() {
     setScans([s, ...scans]);
     setTarget("");
   };
+
+  const deleteProject = async () => {
+    if (!selectedProject) return;
+    if (!confirm("¿Eliminar proyecto seleccionado?")) return;
+    await fetch(`${API}/api/projects/${selectedProject}`, { method: "DELETE" });
+    setProjects(projects.filter(p => p.id !== selectedProject));
+    setSelectedProject(null);
+    setScans(scans.filter(s => s.project_id !== selectedProject));
+  };
+
+  const stopScan = async (scanId) => {
+    await fetch(`${API}/api/scans/${scanId}/stop`, { method: "POST" });
+    setScans(scans.map(s => s.id === scanId ? { ...s, status: "stopping" } : s));
+  };
+
+  const rerunScan = async (scanId) => {
+    const s = await fetch(`${API}/api/scans/${scanId}`).then(r => r.json());
+    const res = await fetch(`${API}/api/scans`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: s.project_id, target: s.target, tools: s.tools })
+    });
+    const newScan = await res.json();
+    setScans([newScan, ...scans]);
+  };
+
+  const openLogs = (scanId) => { setLogScanId(scanId); setLogs([]); };
+  const closeLogs = () => { setLogScanId(null); setLogs([]); };
 
   const viewFindings = async (scanId) => {
     const res = await fetch(`${API}/api/scans/${scanId}/findings`);
@@ -101,13 +136,23 @@ export default function App() {
     cy.layout({ name:"cose" }).run();
   };
 
+  useEffect(() => {
+    if (!logScanId) return;
+    const wsUrl = (API.startsWith("http") ? API.replace(/^http/, "ws") : `ws://${location.hostname}:8000`) + `/ws/scans/${logScanId}/logs`;
+    const ws = new WebSocket(wsUrl);
+    ws.onmessage = (e) => setLogs(prev => [...prev, e.data]);
+    ws.onerror = () => { try { ws.close(); } catch {} };
+    return () => { try { ws.close(); } catch {} };
+  }, [logScanId]);
+
   return (
     <div style={{ padding: 20, fontFamily:"system-ui" }}>
       <h2>Dashboard OSINT</h2>
 
       <div style={{ display:"flex", gap:20, marginBottom:20 }}>
         <div>
-          <button onClick={createProject}>Nuevo proyecto</button>
+          <button onClick={createProject}>Nuevo proyecto</button>{" "}
+          <button onClick={deleteProject} disabled={!selectedProject}>Eliminar proyecto</button>
           <div style={{ marginTop:10 }}>
             <select value={selectedProject||""} onChange={e=>setSelectedProject(Number(e.target.value))}>
               <option value="">Seleccione proyecto</option>
@@ -139,7 +184,7 @@ export default function App() {
       <table border="1" cellPadding="6">
         <thead><tr><th>ID</th><th>Proyecto</th><th>Objetivo</th><th>Estado</th><th>Herramientas</th><th>Acciones</th></tr></thead>
         <tbody>
-          {scans.map(s => (
+          {visibleScans.map(s => (
             <tr key={s.id}>
               <td>{s.id}</td>
               <td>{s.project_id}</td>
@@ -148,6 +193,19 @@ export default function App() {
               <td>{(s.tools||[]).join(", ")}</td>
               <td>
                 <button onClick={() => viewFindings(s.id)}>Ver</button>{" "}
+                <button onClick={() => openLogs(s.id)}>Logs</button>{" "}
+                <button onClick={() => stopScan(s.id)}>Detener</button>{" "}
+                <button onClick={() => rerunScan(s.id)}>Reiniciar</button>{" "}
+                <button onClick={async () => {
+                  if (!confirm(`¿Eliminar scan #${s.id}?`)) return;
+                  const res = await fetch(`${API}/api/scans/${s.id}`, { method: "DELETE" });
+                  if (!res.ok && res.status !== 204) {
+                    const txt = await res.text();
+                    alert(`No se pudo eliminar: ${res.status} ${txt}`);
+                    return;
+                  }
+                  setScans(scans.filter(x => x.id !== s.id));
+                }}>Eliminar</button>{" "}
                 <a href={`${API}/api/exports/${s.id}.csv`} target="_blank" rel="noreferrer">CSV</a>{" "}
                 <a href={`${API}/api/exports/${s.id}.pdf`} target="_blank" rel="noreferrer">PDF</a>
               </td>
@@ -184,6 +242,16 @@ export default function App() {
         </div>
         <div id="graph" style={{ flex:1, height: 400, border:"1px solid #ddd" }} />
       </div>
+
+      {logScanId && (
+        <div style={{ marginTop:20 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <h3 style={{ margin:0 }}>Logs Scan #{logScanId}</h3>
+            <button onClick={closeLogs}>Cerrar</button>
+          </div>
+          <pre style={{ background:"#0b1022", color:"#9efc9e", padding:10, height:240, overflow:"auto" }}>{logs.join("\n")}</pre>
+        </div>
+      )}
 
       <div style={{ marginTop:20 }}>
         <table border="1" cellPadding="6" width="100%">

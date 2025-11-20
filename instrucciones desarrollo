@@ -1,4 +1,4 @@
-Quiero crear un dashboard OSINT interactivo que me permita ejecutar y visualizar resultados de herramientas de inteligencia como Amass, Spiderfoot, TheHarvester, Subfinder y HaveIBeenPwned.
+Quiero crear un dashboard OSINT interactivo que me permita ejecutar y visualizar resultados de herramientas de inteligencia como Amass, Spiderfoot, TheHarvester, Subfinder.
 
 El flujo debe incluir:
 *Entrada de dominio o IP objetivo.
