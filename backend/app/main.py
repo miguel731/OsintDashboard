@@ -27,6 +27,12 @@ r = redislib.from_url(settings.REDIS_URL, decode_responses=True)
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_scans_project_id ON scans (project_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_scans_status ON scans (status)"))
+    except Exception:
+        pass
 
 @app.get("/health")
 def health():
@@ -79,8 +85,17 @@ def create_scan(body: ScanCreate, db: Session = Depends(get_db)):
     return s
 
 @app.get("/api/scans", response_model=List[ScanOut])
-def list_scans(db: Session = Depends(get_db)):
-    return db.query(Scan).order_by(Scan.id.desc()).all()
+def list_scans(
+    project_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    return db.query(Scan).order_by(Scan.id.desc())
+    if project_id is not None:
+        q = q.filter(Scan.project_id == project_id)
+    q = q.offset(offset).limit(max(1, min(limit, 500)))
+    return q.all()
 
 @app.get("/api/scans/{scan_id}", response_model=ScanOut)
 def get_scan(scan_id: int, db: Session = Depends(get_db)):

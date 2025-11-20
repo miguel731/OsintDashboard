@@ -22,11 +22,35 @@ export default function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [logScanId, setLogScanId] = useState(null);
   const [logs, setLogs] = useState([]);
+  const pendingController = React.useRef(null);
+
+  const fetchScans = async (projectId, signal) => {
+    const qs = projectId ? `?project_id=${projectId}&limit=100` : `?limit=100`;
+    const res = await fetch(`${API}/api/scans${qs}`, { signal });
+    const data = await res.json();
+    setScans(data);
+  };
 
   useEffect(() => {
     fetch(`${API}/api/projects`).then(r=>r.json()).then(setProjects);
-    fetch(`${API}/api/scans`).then(r=>r.json()).then(setScans);
-  }, []);
+    const ac = new AbortController();
+    fetchScans(selectedProject, ac.signal);
+    return () => ac.abort();
+  }, []); // carga inicial
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const load = () => {
+      const ac = new AbortController();
+      // cancela la petición previa si existe
+      try { pendingController.current?.abort(); } catch {}
+      pendingController.current = ac;
+      fetchScans(selectedProject, ac.signal);
+    };
+    load();
+    const id = setInterval(load, 8000);
+    return () => { clearInterval(id); try { pendingController.current?.abort(); } catch {} };
+  }, [autoRefresh, selectedProject]);
 
   useEffect(() => {
     const load = async () => {
