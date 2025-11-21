@@ -70,25 +70,40 @@ export default function App() {
     setScans(data);
   };
 
+  // Carga inicial de proyectos
   useEffect(() => {
     fetch(`${API}/api/projects`).then(r=>r.json()).then(setProjects);
-    const ac = new AbortController();
-    fetchScans(selectedProject, ac.signal);
-    fetch(`${API}/api/schedules`).then(r=>r.json()).then(setSchedules);
-    return () => ac.abort();
-  }, []); // carga inicial
+  }, []); // carga inicial de proyectos
 
+  // Refresco de escaneos y schedules (único efecto)
   useEffect(() => {
-    if (!autoRefresh) return;
+    const ac = new AbortController();
+    try { pendingController.current?.abort(); } catch {}
+    pendingController.current = ac;
+
     const load = () => {
-      const ac = new AbortController();
-      try { pendingController.current?.abort(); } catch {}
-      pendingController.current = ac;
       fetchScans(selectedProject, ac.signal);
       fetch(`${API}/api/schedules`).then(r=>r.json()).then(setSchedules);
     };
+
+    // Consulta inicial (también cuando cambia selectedProject)
     load();
-    const id = setInterval(load, 8000);
+
+    // Si autoRefresh está desactivado, no crear intervalos
+    if (!autoRefresh) {
+      return () => { try { pendingController.current?.abort(); } catch {} };
+    }
+
+    // Intervalo cada 8s
+    const id = setInterval(() => {
+      const ac2 = new AbortController();
+      try { pendingController.current?.abort(); } catch {}
+      pendingController.current = ac2;
+
+      fetchScans(selectedProject, ac2.signal);
+      fetch(`${API}/api/schedules`).then(r=>r.json()).then(setSchedules);
+    }, 8000);
+
     return () => { clearInterval(id); try { pendingController.current?.abort(); } catch {} };
   }, [autoRefresh, selectedProject]);
 
