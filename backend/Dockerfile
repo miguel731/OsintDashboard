@@ -13,25 +13,12 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Instalar binarios OSINT (Amass y Subfinder) + TheHarvester via git
-ARG AMASS_VERSION=4.1.0
+# Instalar binarios OSINT (Subfinder) + TheHarvester via git
 ARG SUBFINDER_VERSION=2.6.5
 ARG THEHARVESTER_VERSION=4.8.2
 RUN set -eux; \
     arch="$(uname -m)"; \
     if [ "$arch" = "x86_64" ]; then ARCH=amd64; elif [ "$arch" = "aarch64" ]; then ARCH=arm64; else ARCH=amd64; fi; \
-    # Amass (fallback .tar.gz -> .zip)
-    AMASS_TAR="https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_Linux_${ARCH}.tar.gz"; \
-    AMASS_ZIP="https://github.com/owasp-amass/amass/releases/download/v${AMASS_VERSION}/amass_Linux_${ARCH}.zip"; \
-    if curl -fsSL -o /tmp/amass.tgz "$AMASS_TAR"; then \
-      tar -xzf /tmp/amass.tgz -C /tmp; \
-    else \
-      curl -fsSL -o /tmp/amass.zip "$AMASS_ZIP"; \
-      unzip -qo /tmp/amass.zip -d /tmp; \
-    fi; \
-    AMASS_BIN="$(find /tmp -maxdepth 3 -type f -name amass | head -n1)"; \
-    test -n "$AMASS_BIN"; install "$AMASS_BIN" /usr/local/bin/amass; \
-    rm -rf /tmp/amass*; \
     SUB_TAR="https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_${ARCH}.tar.gz"; \
     SUB_ZIP="https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VERSION}/subfinder_${SUBFINDER_VERSION}_linux_${ARCH}.zip"; \
     if curl -fsSL -o /tmp/subfinder.tgz "$SUB_TAR"; then \

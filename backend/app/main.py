@@ -91,7 +91,7 @@ def list_scans(
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
-    return db.query(Scan).order_by(Scan.id.desc())
+    q = db.query(Scan).order_by(Scan.id.desc())
     if project_id is not None:
         q = q.filter(Scan.project_id == project_id)
     q = q.offset(offset).limit(max(1, min(limit, 500)))

@@ -10,7 +10,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [target, setTarget] = useState("");
-  const [tools, setTools] = useState(["amass","subfinder","theharvester"]); // hibp para emails
+  const [tools, setTools] = useState(["subfinder","theharvester"]); // hibp para emails
   const [scans, setScans] = useState([]);
   const [findings, setFindings] = useState([]);
 
@@ -42,7 +42,6 @@ export default function App() {
     if (!autoRefresh) return;
     const load = () => {
       const ac = new AbortController();
-      // cancela la petición previa si existe
       try { pendingController.current?.abort(); } catch {}
       pendingController.current = ac;
       fetchScans(selectedProject, ac.signal);
@@ -187,18 +186,16 @@ export default function App() {
         <div>
           <input placeholder="Dominio/IP/Email" value={target} onChange={e=>setTarget(e.target.value)} />
           <div>
-            <label><input type="checkbox" checked={tools.includes("amass")} onChange={e=>{
-              const v = "amass"; setTools(e.target.checked ? [...tools,v] : tools.filter(t=>t!==v));
-            }} /> Amass</label>
+            {/* Amass eliminado */}
+            {/* Subfinder */}
             <label><input type="checkbox" checked={tools.includes("subfinder")} onChange={e=>{
               const v = "subfinder"; setTools(e.target.checked ? [...tools,v] : tools.filter(t=>t!==v));
             }} /> Subfinder</label>
+            {/* TheHarvester */}
             <label><input type="checkbox" checked={tools.includes("theharvester")} onChange={e=>{
               const v = "theharvester"; setTools(e.target.checked ? [...tools,v] : tools.filter(t=>t!==v));
             }} /> TheHarvester</label>
-            <label><input type="checkbox" checked={tools.includes("hibp")} onChange={e=>{
-              const v = "hibp"; setTools(e.target.checked ? [...tools,v] : tools.filter(t=>t!==v));
-            }} /> HIBP (email)</label>
+            {/* HIBP eliminado */}
           </div>
           <button onClick={startScan}>Iniciar escaneo</button>
         </div>
