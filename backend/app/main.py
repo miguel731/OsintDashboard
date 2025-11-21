@@ -1,3 +1,4 @@
+# Módulo: imports
 from fastapi import FastAPI, Depends, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -10,9 +11,10 @@ from .exports import export_csv, export_pdf
 from .celery_app import celery
 from .config import settings
 import redis as redislib
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import WebSocket
 import asyncio
+from sqlalchemy import text
 
 app = FastAPI(title="OSINT Dashboard API", version="0.1.0")
 
@@ -31,6 +33,7 @@ def on_startup():
         with engine.connect() as conn:
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_scans_project_id ON scans (project_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_scans_status ON scans (status)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_schedules_next_run_at ON schedules (next_run_at)"))
     except Exception:
         pass
 
@@ -73,6 +76,9 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
 # Scans
 @app.post("/api/scans", response_model=ScanOut)
 def create_scan(body: ScanCreate, db: Session = Depends(get_db)):
+    p = db.query(Project).get(body.project_id)
+    if not p:
+        raise HTTPException(400, "Debe seleccionar un proyecto válido")
     s = Scan(project_id=body.project_id, target=body.target, tools=body.tools, status="pending")
     db.add(s); db.commit(); db.refresh(s)
     async_res = run_scan.delay(s.id, body.target, body.tools)
@@ -226,4 +232,48 @@ def delete_scan(scan_id: int, db: Session = Depends(get_db)):
         pass
     db.delete(s)
     db.commit()
+    return None
+
+# Schedules (programaciones)
+from .models import Schedule
+from .schemas import ScheduleCreate, ScheduleOut
+
+@app.post("/api/schedules", response_model=ScheduleOut)
+def create_schedule(body: ScheduleCreate, db: Session = Depends(get_db)):
+    p = db.query(Project).get(body.project_id)
+    if not p:
+        raise HTTPException(400, "Debe seleccionar un proyecto válido")
+    s = Schedule(
+        project_id=body.project_id,
+        target=body.target,
+        tools=body.tools,
+        interval_minutes=body.interval_minutes,
+        enabled=True,
+        next_run_at=datetime.utcnow() + timedelta(minutes=max(1, body.interval_minutes)),
+    )
+    db.add(s); db.commit(); db.refresh(s)
+    return s
+
+@app.get("/api/schedules", response_model=List[ScheduleOut])
+def list_schedules(db: Session = Depends(get_db)):
+    return db.query(Schedule).order_by(Schedule.id.desc()).all()
+
+from pydantic import BaseModel
+class SchedulePatch(BaseModel):
+    enabled: bool | None = None
+
+@app.patch("/api/schedules/{schedule_id}", response_model=ScheduleOut)
+def update_schedule(schedule_id: int, body: SchedulePatch, db: Session = Depends(get_db)):
+    s = db.query(Schedule).get(schedule_id)
+    if not s: raise HTTPException(404, "Schedule no encontrado")
+    if body.enabled is not None:
+        s.enabled = body.enabled
+    db.commit(); db.refresh(s)
+    return s
+
+@app.delete("/api/schedules/{schedule_id}", status_code=204)
+def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+    s = db.query(Schedule).get(schedule_id)
+    if not s: raise HTTPException(404, "Schedule no encontrado")
+    db.delete(s); db.commit()
     return None

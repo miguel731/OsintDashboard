@@ -76,11 +76,10 @@ def run_scan(scan_id: int, target: str, tools: list[str]):
         db.close()
 
 @celery.task(name="app.tasks.run_scheduled_scan")
-def run_scheduled_scan(target: str, tools: list[str]):
-    # Puede crear un scan "programado" sin proyecto, o con uno por defecto
+def run_scheduled_scan(project_id: int | None, target: str, tools: list[str]):
     db = SessionLocal()
     try:
-        scan = Scan(target=target, status="pending", tools=tools, project_id=None)
+        scan = Scan(target=target, status="pending", tools=tools, project_id=project_id)
         db.add(scan)
         db.commit()
         run_scan.delay(scan.id, target, tools)
@@ -105,3 +104,23 @@ def save_findings(db: Session, scan: Scan, findings: list[dict]) -> None:
         ))
     db.add_all(objs)
     db.commit()
+
+from datetime import timedelta
+from .models import Schedule
+
+@celery.task(name="app.tasks.tick_schedules")
+def tick_schedules():
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        due = db.query(Schedule).filter(Schedule.enabled == True, Schedule.next_run_at <= now).all()
+        for s in due:
+            s.last_run_at = now
+            s.next_run_at = now + timedelta(minutes=max(1, s.interval_minutes))
+            db.commit()
+            try:
+                run_scheduled_scan.delay(s.project_id, s.target, s.tools)
+            except Exception:
+                pass
+    finally:
+        db.close()

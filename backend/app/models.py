@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, JSON
+# Módulo: imports + uso de Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Text, JSON, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .db import Base
@@ -40,3 +41,15 @@ class Finding(Base):
     meta = Column(JSON, default={})
     raw = Column(Text, nullable=True)
     scan = relationship("Scan", back_populates="findings")
+
+class Schedule(Base):
+    __tablename__ = "schedules"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    target = Column(String(255), nullable=False)
+    tools = Column(JSON, default=[])
+    interval_minutes = Column(Integer, nullable=False)  # cada N minutos
+    enabled = Column(Boolean, default=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=False)
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

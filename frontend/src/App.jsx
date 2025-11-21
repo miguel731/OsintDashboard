@@ -13,6 +13,8 @@ export default function App() {
   const [tools, setTools] = useState(["subfinder","theharvester"]); // hibp para emails
   const [scans, setScans] = useState([]);
   const [findings, setFindings] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [scheduleInterval, setScheduleInterval] = useState(60);
 
   // Filtros
   const [filterTool, setFilterTool] = useState("all");
@@ -35,6 +37,7 @@ export default function App() {
     fetch(`${API}/api/projects`).then(r=>r.json()).then(setProjects);
     const ac = new AbortController();
     fetchScans(selectedProject, ac.signal);
+    fetch(`${API}/api/schedules`).then(r=>r.json()).then(setSchedules);
     return () => ac.abort();
   }, []); // carga inicial
 
@@ -45,6 +48,7 @@ export default function App() {
       try { pendingController.current?.abort(); } catch {}
       pendingController.current = ac;
       fetchScans(selectedProject, ac.signal);
+      fetch(`${API}/api/schedules`).then(r=>r.json()).then(setSchedules);
     };
     load();
     const id = setInterval(load, 8000);
@@ -104,6 +108,35 @@ export default function App() {
     const s = await res.json();
     setScans([s, ...scans]);
     setTarget("");
+  };
+
+  const createSchedule = async () => {
+    if (!selectedProject) return alert("Selecciona un proyecto para programar");
+    if (!target) return alert("Define el objetivo del schedule");
+    const body = { project_id: selectedProject, target, tools, interval_minutes: Number(scheduleInterval) || 60 };
+    const res = await fetch(`${API}/api/schedules`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(body)
+    });
+    const s = await res.json();
+    setSchedules([s, ...schedules]);
+  };
+
+  const toggleSchedule = async (id, enabled) => {
+    const res = await fetch(`${API}/api/schedules/${id}`, {
+      method:"PATCH",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ enabled })
+    });
+    const s = await res.json();
+    setSchedules(schedules.map(x => x.id === id ? s : x));
+  };
+
+  const deleteSchedule = async (id) => {
+    if (!confirm(`¿Eliminar schedule #${id}?`)) return;
+    const res = await fetch(`${API}/api/schedules/${id}`, { method:"DELETE" });
+    if (res.status === 204) setSchedules(schedules.filter(x => x.id !== id));
   };
 
   const deleteProject = async () => {
@@ -198,8 +231,34 @@ export default function App() {
             {/* HIBP eliminado */}
           </div>
           <button onClick={startScan}>Iniciar escaneo</button>
+          <div style={{ marginTop:8 }}>
+            <input type="number" min="1" style={{ width:120 }} value={scheduleInterval} onChange={e=>setScheduleInterval(e.target.value)} />
+            <button onClick={createSchedule} style={{ marginLeft:8 }}>Programar cada N minutos</button>
+          </div>
         </div>
       </div>
+
+      <h3>Programaciones</h3>
+      <table border="1" cellPadding="6" width="100%">
+        <thead><tr><th>ID</th><th>Proyecto</th><th>Objetivo</th><th>Herramientas</th><th>Intervalo</th><th>Próxima</th><th>Habilitado</th><th>Acciones</th></tr></thead>
+        <tbody>
+          {schedules.map(s => (
+            <tr key={s.id}>
+              <td>{s.id}</td>
+              <td>{s.project_id ?? "-"}</td>
+              <td>{s.target}</td>
+              <td>{(s.tools||[]).join(", ")}</td>
+              <td>{s.interval_minutes}m</td>
+              <td>{new Date(s.next_run_at).toLocaleString()}</td>
+              <td>{s.enabled ? "Sí" : "No"}</td>
+              <td>
+                <button onClick={() => toggleSchedule(s.id, !s.enabled)}>{s.enabled ? "Deshabilitar" : "Habilitar"}</button>{" "}
+                <button onClick={() => deleteSchedule(s.id)}>Eliminar</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <h3>Escaneos</h3>
       <table border="1" cellPadding="6">
