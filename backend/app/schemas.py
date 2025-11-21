@@ -33,7 +33,7 @@ class ScanOut(BaseModel):
     target: str
     status: str
     tools: List[str]
-    project_id: int
+    project_id: Optional[int]
     class Config:
         from_attributes = True
 

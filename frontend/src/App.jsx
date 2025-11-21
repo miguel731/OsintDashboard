@@ -15,7 +15,44 @@ export default function App() {
   const [findings, setFindings] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [scheduleInterval, setScheduleInterval] = useState(60);
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [editingSchedule, setEditingSchedule] = useState(null);
 
+    const fmtDTLocal = (iso) => {
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const startEditSchedule = (s) => {
+    setEditingScheduleId(s.id);
+    setEditingSchedule({
+      tools: [...(s.tools || [])],
+      interval_minutes: s.interval_minutes,
+      next_run_at: s.next_run_at
+    });
+  };
+
+  const cancelEditSchedule = () => {
+    setEditingScheduleId(null);
+    setEditingSchedule(null);
+  };
+
+  const saveEditSchedule = async (id) => {
+    const payload = {};
+    if (editingSchedule?.tools) payload.tools = editingSchedule.tools;
+    if (editingSchedule?.interval_minutes) payload.interval_minutes = Number(editingSchedule.interval_minutes);
+    if (editingSchedule?.next_run_at) payload.next_run_at = new Date(editingSchedule.next_run_at).toISOString();
+
+    const res = await fetch(`${API}/api/schedules/${id}`, {
+      method:"PATCH",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+    const updated = await res.json();
+    setSchedules(schedules.map(x => x.id === id ? updated : x));
+    cancelEditSchedule();
+  };
   // Filtros
   const [filterTool, setFilterTool] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -247,13 +284,78 @@ export default function App() {
               <td>{s.id}</td>
               <td>{s.project_id ?? "-"}</td>
               <td>{s.target}</td>
-              <td>{(s.tools||[]).join(", ")}</td>
-              <td>{s.interval_minutes}m</td>
-              <td>{new Date(s.next_run_at).toLocaleString()}</td>
+              <td>
+                {editingScheduleId === s.id ? (
+                  <div style={{ display:"flex", gap:8 }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={editingSchedule.tools.includes("subfinder")}
+                        onChange={e => {
+                          const v = "subfinder";
+                          setEditingSchedule(ed => ({
+                            ...ed,
+                            tools: e.target.checked ? [...ed.tools, v] : ed.tools.filter(t => t !== v)
+                          }));
+                        }}
+                      /> Subfinder
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={editingSchedule.tools.includes("theharvester")}
+                        onChange={e => {
+                          const v = "theharvester";
+                          setEditingSchedule(ed => ({
+                            ...ed,
+                            tools: e.target.checked ? [...ed.tools, v] : ed.tools.filter(t => t !== v)
+                          }));
+                        }}
+                      /> TheHarvester
+                    </label>
+                  </div>
+                ) : (
+                  (s.tools||[]).join(", ")
+                )}
+              </td>
+              <td>
+                {editingScheduleId === s.id ? (
+                  <input
+                    type="number"
+                    min="1"
+                    value={editingSchedule.interval_minutes}
+                    onChange={e => setEditingSchedule(ed => ({ ...ed, interval_minutes: e.target.value }))}
+                    style={{ width: 100 }}
+                  />
+                ) : (
+                  `${s.interval_minutes}m`
+                )}
+              </td>
+              <td>
+                {editingScheduleId === s.id ? (
+                  <input
+                    type="datetime-local"
+                    value={fmtDTLocal(editingSchedule.next_run_at || new Date().toISOString())}
+                    onChange={e => setEditingSchedule(ed => ({ ...ed, next_run_at: e.target.value }))}
+                  />
+                ) : (
+                  new Date(s.next_run_at).toLocaleString()
+                )}
+              </td>
               <td>{s.enabled ? "Sí" : "No"}</td>
               <td>
-                <button onClick={() => toggleSchedule(s.id, !s.enabled)}>{s.enabled ? "Deshabilitar" : "Habilitar"}</button>{" "}
-                <button onClick={() => deleteSchedule(s.id)}>Eliminar</button>
+                {editingScheduleId === s.id ? (
+                  <>
+                    <button onClick={() => saveEditSchedule(s.id)}>Guardar</button>{" "}
+                    <button onClick={cancelEditSchedule}>Cancelar</button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => toggleSchedule(s.id, !s.enabled)}>{s.enabled ? "Deshabilitar" : "Habilitar"}</button>{" "}
+                    <button onClick={() => startEditSchedule(s)}>Editar</button>{" "}
+                    <button onClick={() => deleteSchedule(s.id)}>Eliminar</button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

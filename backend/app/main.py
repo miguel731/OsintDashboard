@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from fastapi import WebSocket
 import asyncio
 from sqlalchemy import text
+from pydantic import BaseModel, Field
 
 app = FastAPI(title="OSINT Dashboard API", version="0.1.0")
 
@@ -258,9 +259,11 @@ def create_schedule(body: ScheduleCreate, db: Session = Depends(get_db)):
 def list_schedules(db: Session = Depends(get_db)):
     return db.query(Schedule).order_by(Schedule.id.desc()).all()
 
-from pydantic import BaseModel
 class SchedulePatch(BaseModel):
     enabled: bool | None = None
+    tools: List[str] | None = None
+    interval_minutes: int | None = Field(default=None, gt=0)
+    next_run_at: datetime | None = None
 
 @app.patch("/api/schedules/{schedule_id}", response_model=ScheduleOut)
 def update_schedule(schedule_id: int, body: SchedulePatch, db: Session = Depends(get_db)):
@@ -268,6 +271,12 @@ def update_schedule(schedule_id: int, body: SchedulePatch, db: Session = Depends
     if not s: raise HTTPException(404, "Schedule no encontrado")
     if body.enabled is not None:
         s.enabled = body.enabled
+    if body.tools is not None:
+        s.tools = body.tools
+    if body.interval_minutes is not None:
+        s.interval_minutes = body.interval_minutes
+    if body.next_run_at is not None:
+        s.next_run_at = body.next_run_at
     db.commit(); db.refresh(s)
     return s
 
